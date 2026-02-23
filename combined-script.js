@@ -114,12 +114,14 @@ function showSuggestions() {
 }
 
 // Populate dropdown with locations
-sortedLocations.forEach(location => {
-  const option = document.createElement("option");
-  option.value = location;
-  option.textContent = location;
-  select.appendChild(option);
-});
+if (select) {
+  sortedLocations.forEach(location => {
+    const option = document.createElement("option");
+    option.value = location;
+    option.textContent = location;
+    select.appendChild(option);
+  });
+}
 
 // Show price based on selected location
 function showPrice() {
@@ -134,11 +136,13 @@ function showPrice() {
 }
 
 // Close suggestions when clicking outside
-document.addEventListener('click', function(event) {
-  if (!searchInput.contains(event.target) && !suggestionsBox.contains(event.target)) {
-    suggestionsBox.style.display = "none";
-  }
-});
+if (searchInput && suggestionsBox) {
+  document.addEventListener('click', function(event) {
+    if (!searchInput.contains(event.target) && !suggestionsBox.contains(event.target)) {
+      suggestionsBox.style.display = "none";
+    }
+  });
+}
 
 /* ================= FADE SLIDER FUNCTION ================= */
 
@@ -231,6 +235,7 @@ const serviceTypeEl = document.getElementById("service-type");
 const customerLocationFieldEl = document.getElementById("customer-location-field");
 const customerLocationSuggestionsEl = document.getElementById("customer-location-suggestions");
 let isCartOpen = false;
+const CART_STORAGE_KEY = "custom34_cart_state_v1";
 
 function showPageToast(message) {
   let container = document.querySelector(".page-toast-container");
@@ -355,6 +360,43 @@ function updateCustomerLocationSuggestions() {
   customerLocationSuggestionsEl.classList.remove("hidden");
 }
 
+function loadCartState() {
+  try {
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) return;
+
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed.cart)) {
+      cart = parsed.cart;
+    }
+    if (customerPhoneEl && typeof parsed.customerPhone === "string") {
+      customerPhoneEl.value = parsed.customerPhone;
+    }
+    if (serviceTypeEl && typeof parsed.serviceType === "string") {
+      serviceTypeEl.value = parsed.serviceType;
+    }
+    if (customerLocationEl && typeof parsed.customerLocation === "string") {
+      customerLocationEl.value = parsed.customerLocation;
+    }
+  } catch (err) {
+    // Ignore invalid storage entries
+  }
+}
+
+function saveCartState() {
+  try {
+    const payload = {
+      cart,
+      customerPhone: String(customerPhoneEl?.value || ""),
+      serviceType: String(serviceTypeEl?.value || ""),
+      customerLocation: String(customerLocationEl?.value || "")
+    };
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    // Ignore storage failures
+  }
+}
+
 function setCartOpen(nextOpen) {
   isCartOpen = nextOpen;
   cartPanelEl.classList.toggle("open", isCartOpen);
@@ -376,8 +418,16 @@ function renderCart() {
   const grandTotal = itemsTotal + deliveryCharge;
   const deliverySummary = getDeliverySummary();
 
+  if (cartToggleCountEl) {
+    cartToggleCountEl.textContent = String(totalItems);
+  }
+
+  if (!cartItemsEl || !cartCountBadgeEl || !cartTotalEl || !cartItemsTotalEl || !cartDeliveryChargeEl || !cartDeliveryLabelEl) {
+    saveCartState();
+    return;
+  }
+
   cartCountBadgeEl.textContent = `${totalItems} item${totalItems === 1 ? "" : "s"}`;
-  cartToggleCountEl.textContent = String(totalItems);
   if (cartItemsTotalEl) {
     cartItemsTotalEl.textContent = formatRupees(itemsTotal);
   }
@@ -391,6 +441,7 @@ function renderCart() {
 
   if (validEntries.length === 0) {
     cartItemsEl.innerHTML = '<p class="cart-empty-text">Your cart is empty.</p>';
+    saveCartState();
     return;
   }
 
@@ -409,6 +460,8 @@ function renderCart() {
       </div>
     </div>
   `).join("");
+
+  saveCartState();
 }
 
 document.addEventListener("click", function(e) {
@@ -454,7 +507,9 @@ document.addEventListener("click", function(e) {
   showPageToast(`${removedItem.name} removed from cart`);
 });
 
-document.getElementById("order-all-btn").addEventListener("click", function() {
+const orderAllBtnEl = document.getElementById("order-all-btn");
+if (orderAllBtnEl) {
+orderAllBtnEl.addEventListener("click", function() {
 
   const validItems = cart.filter(item => Number(item.quantity) > 0);
   const totalQuantity = validItems.reduce((sum, item) => sum + Number(item.quantity), 0);
@@ -528,6 +583,7 @@ ${deliveryLine}
   window.location.href = url;
 
 });
+}
 
 if (select) {
   select.addEventListener("change", function() {
@@ -577,12 +633,40 @@ document.addEventListener("click", function(event) {
   }
 });
 
-cartToggleBtnEl.addEventListener("click", function() {
-  setCartOpen(!isCartOpen);
-});
+if (cartToggleBtnEl) {
+  cartToggleBtnEl.addEventListener("click", function() {
+    saveCartState();
+    const onCartPage = document.body.classList.contains("cart-page");
+    if (onCartPage) {
+      if (window.opener && !window.opener.closed) {
+        window.opener.focus();
+      } else {
+        window.location.href = "index.html";
+      }
+      return;
+    }
+
+    const cartWindow = window.open("cart.html", "custom34_cart");
+    if (cartWindow) {
+      cartWindow.focus();
+    }
+  });
+}
+
+const returnBtnEl = document.getElementById("return-btn");
+if (returnBtnEl) {
+  returnBtnEl.addEventListener("click", function() {
+    if (window.opener && !window.opener.closed) {
+      window.opener.focus();
+      window.close();
+    } else if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "index.html";
+    }
+  });
+}
 
 updateServiceTypeUI();
+loadCartState();
 renderCart();
-
-
-
